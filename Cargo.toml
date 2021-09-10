@@ -1,0 +1,6 @@
+[workspace]
+members = [
+        "zenoh-flow-cxx-source",
+        "zenoh-flow-cxx-operator",
+        "zenoh-flow-cxx-sink",
+]

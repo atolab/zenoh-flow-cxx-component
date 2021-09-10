@@ -1,0 +1,35 @@
+flow: CxxFizz
+
+operators:
+  - id: CxxFizz
+    uri: file:///Users/julien/dev/atolab/zenoh-flow-cxx-component/target/debug/libzenoh_flow_cxx_operator.dylib
+    inputs:
+      - id: number
+        type: u64
+    outputs:
+      - id: fizz
+        type: string
+
+sources:
+  - id: CxxManualSource
+    uri: file:///Users/julien/dev/atolab/zenoh-flow-cxx-component/target/debug/libzenoh_flow_cxx_source.dylib
+    period:
+      duration: 500
+      unit: ms
+    output:
+      id: number
+      type: u64
+
+sinks:
+  - id: CxxSink
+    uri: file:///Users/julien/dev/atolab/zenoh-flow-cxx-component/target/debug/libzenoh_flow_cxx_sink.dylib
+    input:
+      id: fizz
+      type: string
+
+links:
+  - from: CxxManualSource.number
+    to: CxxFizz.number
+
+  - from: CxxFizz.fizz
+    to: CxxSink.fizz
