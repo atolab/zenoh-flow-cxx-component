@@ -1,4 +1,4 @@
-#include "zenoh-flow-cxx-source/cpp/include/zenoh_flow.hpp"
+#include "zenoh-flow-cxx-source/cpp/include/source.hpp"
 #include "zenoh-flow-cxx-source/src/lib.rs.h"
 #include <cstdint>
 #include <cstring>
@@ -7,7 +7,8 @@
 #include <vector>
 #include <sstream>
 
-namespace zenoh_flow {
+namespace zenoh {
+namespace flow {
 
 using byte_t = unsigned char ;
 
@@ -34,17 +35,19 @@ rust::Vec<byte_t> to_bytes( const T& object ) {
   return to_rust_vec<byte_t>(std::vector<byte_t>(begin, end));
 }
 
-std::unique_ptr<ZFCxxState>
-initialize(const ZFCxxConfigurationMap &configuration)
+State::State() {}
+
+std::unique_ptr<State>
+initialize(const ConfigurationMap &configuration)
 {
   //
   // /!\ NOTE: `make_unique` requires "c++14"
   //
-  return std::make_unique<ZFCxxState>();
+  return std::make_unique<State>();
 }
 
-rust::Vec<ZFCxxOutput>
-run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state)
+rust::Vec<Output>
+run(Context &context, std::unique_ptr<State> &state)
 {
   std::uint64_t number;
   std::string input;
@@ -58,12 +61,12 @@ run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state)
   std::stringstream(input) >> number;
   std::cout << std::endl;
 
-  ZFCxxOutput manual_source_output { "number", to_bytes(number) };
+  Output manual_source_output { "number", to_bytes(number) };
 
-  std::vector<ZFCxxOutput> results(1);
+  std::vector<Output> results(1);
   results.push_back(manual_source_output);
 
-  // std::cout << "[source] Returning… "<< std::endl;
-  return to_rust_vec<ZFCxxOutput>(results);
+  return to_rust_vec<Output>(results);
 }
-} // namespace zenoh_flow
+} // namespace flow
+} // namespace zenoh

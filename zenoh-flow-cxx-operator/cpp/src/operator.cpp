@@ -1,4 +1,4 @@
-#include "zenoh-flow-cxx-operator/cpp/include/zenoh_flow.hpp"
+#include "zenoh-flow-cxx-operator/cpp/include/operator.hpp"
 #include "zenoh-flow-cxx-operator/src/lib.rs.h"
 #include <cstdint>
 #include <cstring>
@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-namespace zenoh_flow {
+namespace zenoh {
+namespace flow {
 
 using byte_t = unsigned char ;
 
@@ -45,20 +46,22 @@ T& from_bytes( const rust::Vec<byte_t>& bytes, T& object )
     return object ;
 }
 
-std::unique_ptr<ZFCxxState>
-initialize(const ZFCxxConfigurationMap &configuration) {
+State::State() {}
+
+std::unique_ptr<State>
+initialize(const ConfigurationMap &configuration) {
   //
   // /!\ NOTE: `make_unique` requires "c++14"
   //
-  return std::make_unique<ZFCxxState>();
+  return std::make_unique<State>();
 }
 
 bool
-input_rule(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxToken> &tokens) {
+input_rule(Context &context, std::unique_ptr<State> &state, rust::Vec<Token> &tokens) {
   std::cout << "[Fizz] Input rule says: ";
 
   for (auto token : tokens) {
-    if (token.status != ZFCxxTokenStatus::Ready) {
+    if (token.status != TokenStatus::Ready) {
       std::cout << "no" << std::endl;
         return false;
       }
@@ -68,8 +71,8 @@ input_rule(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<
   return true;
 }
 
-rust::Vec<ZFCxxOutput>
-run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxInput> inputs) {
+rust::Vec<Output>
+run(Context &context, std::unique_ptr<State> &state, rust::Vec<Input> inputs) {
   std::uint64_t number = 0;
   from_bytes(inputs[0].data, number);
 
@@ -79,9 +82,10 @@ run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxIn
   }
   fizz_str.push_back('\0');
 
-  ZFCxxOutput fizz_output { "fizz", to_bytes(fizz_str) };
-  std::vector<ZFCxxOutput> results { fizz_output };
+  Output fizz_output { "fizz", to_bytes(fizz_str) };
+  std::vector<Output> results { fizz_output };
   return to_rust_vec(results);
 }
-}
+} // namespace flow
+} // namespace zenoh
 

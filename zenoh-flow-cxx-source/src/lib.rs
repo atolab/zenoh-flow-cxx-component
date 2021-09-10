@@ -8,20 +8,20 @@ use zenoh_flow::{
 
 extern crate zenoh_flow;
 
-#[cxx::bridge(namespace = "zenoh_flow")]
+#[cxx::bridge(namespace = "zenoh::flow")]
 pub mod ffi {
     // Shared structures between Rust and C++
-    pub struct ZFCxxContext {
+    pub struct Context {
         pub mode: usize,
     }
 
-    pub enum ZFCxxTokenStatus {
+    pub enum TokenStatus {
         Pending,
         Ready,
         DeadlineMiss,
     }
 
-    pub enum ZFCxxTokenAction {
+    pub enum TokenAction {
         Consume,
         Drop,
         Keep,
@@ -29,58 +29,55 @@ pub mod ffi {
         Wait,
     }
 
-    pub struct ZFCxxToken {
-        pub status: ZFCxxTokenStatus,
-        pub action: ZFCxxTokenAction,
+    pub struct Token {
+        pub status: TokenStatus,
+        pub action: TokenAction,
         pub port_id: String,
         pub data: Vec<u8>,
         pub timestamp: u64,
     }
 
-    pub struct ZFCxxInput {
+    pub struct Input {
         pub port_id: String,
         pub data: Vec<u8>,
         pub timestamp: u64,
     }
 
-    pub struct ZFCxxOutput {
+    pub struct Output {
         pub port_id: String,
         pub data: Vec<u8>,
     }
 
-    pub struct ZFCxxData {
+    pub struct Data {
         pub bytes: Vec<u8>,
     }
 
-    pub struct ZFCxxConfiguration {
+    pub struct Configuration {
         pub key: String,
         pub value: String,
     }
 
-    pub struct ZFCxxConfigurationMap {
-        pub map: Vec<ZFCxxConfiguration>,
+    pub struct ConfigurationMap {
+        pub map: Vec<Configuration>,
     }
 
     unsafe extern "C++" {
-        include!("zenoh-flow-cxx-source/cpp/include/zenoh_flow.hpp");
+        include!("zenoh-flow-cxx-source/cpp/include/source.hpp");
 
-        type ZFCxxState;
+        type State;
 
-        fn initialize(configuration: &ZFCxxConfigurationMap) -> UniquePtr<ZFCxxState>;
+        fn initialize(configuration: &ConfigurationMap) -> UniquePtr<State>;
 
-        fn run(
-            context: &mut ZFCxxContext,
-            state: &mut UniquePtr<ZFCxxState>,
-        ) -> Result<Vec<ZFCxxOutput>>;
+        fn run(context: &mut Context, state: &mut UniquePtr<State>) -> Result<Vec<Output>>;
     }
 }
 
-impl From<HashMap<String, String>> for ffi::ZFCxxConfigurationMap {
+impl From<HashMap<String, String>> for ffi::ConfigurationMap {
     fn from(configuration: HashMap<String, String>) -> Self {
-        ffi::ZFCxxConfigurationMap {
+        ffi::ConfigurationMap {
             map: configuration
                 .iter()
-                .map(|(key, value)| ffi::ZFCxxConfiguration {
+                .map(|(key, value)| ffi::Configuration {
                     key: key.clone(),
                     value: value.clone(),
                 })
@@ -89,14 +86,14 @@ impl From<HashMap<String, String>> for ffi::ZFCxxConfigurationMap {
     }
 }
 
-unsafe impl Send for ffi::ZFCxxState {}
-unsafe impl Sync for ffi::ZFCxxState {}
+unsafe impl Send for ffi::State {}
+unsafe impl Sync for ffi::State {}
 
-pub struct ZFCxxStateWrapper {
-    pub state: UniquePtr<ffi::ZFCxxState>,
+pub struct StateWrapper {
+    pub state: UniquePtr<ffi::State>,
 }
 
-impl ZFStateTrait for ZFCxxStateWrapper {
+impl ZFStateTrait for StateWrapper {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -106,27 +103,25 @@ impl ZFStateTrait for ZFCxxStateWrapper {
     }
 }
 
-impl Debug for ZFCxxStateWrapper {
+impl Debug for StateWrapper {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
-impl ffi::ZFCxxData {
+impl ffi::Data {
     pub fn new(bytes: Vec<u8>) -> Self {
         Self { bytes }
     }
 }
 
-impl Debug for ffi::ZFCxxData {
+impl Debug for ffi::Data {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ZFCxxData")
-            .field("bytes", &self.bytes)
-            .finish()
+        f.debug_struct("Data").field("bytes", &self.bytes).finish()
     }
 }
 
-impl ZFDowncastAny for ffi::ZFCxxData {
+impl ZFDowncastAny for ffi::Data {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -136,13 +131,13 @@ impl ZFDowncastAny for ffi::ZFCxxData {
     }
 }
 
-impl ZFDataTrait for ffi::ZFCxxData {
+impl ZFDataTrait for ffi::Data {
     fn try_serialize(&self) -> ZFResult<Vec<u8>> {
         Ok(self.bytes.clone())
     }
 }
 
-impl From<&mut ZFContext> for ffi::ZFCxxContext {
+impl From<&mut ZFContext> for ffi::Context {
     fn from(context: &mut ZFContext) -> Self {
         Self { mode: context.mode }
     }
@@ -150,19 +145,19 @@ impl From<&mut ZFContext> for ffi::ZFCxxContext {
 
 /*
 
-ZFCxxSource implementation.
+Source implementation.
 
 */
-pub struct ZFCxxSource;
+pub struct Source;
 
-impl ZFComponent for ZFCxxSource {
+impl ZFComponent for Source {
     fn initialize(
         &self,
         configuration: &Option<std::collections::HashMap<String, String>>,
     ) -> Box<dyn zenoh_flow::ZFStateTrait> {
         let configuration = match configuration {
-            Some(config) => ffi::ZFCxxConfigurationMap::from(config.clone()),
-            None => ffi::ZFCxxConfigurationMap { map: Vec::new() },
+            Some(config) => ffi::ConfigurationMap::from(config.clone()),
+            None => ffi::ConfigurationMap { map: Vec::new() },
         };
 
         let state = {
@@ -171,7 +166,7 @@ impl ZFComponent for ZFCxxSource {
                 ffi::initialize(&configuration)
             }
         };
-        Box::new(ZFCxxStateWrapper { state })
+        Box::new(StateWrapper { state })
     }
 
     fn clean(&self, _state: &mut Box<dyn ZFStateTrait>) -> ZFResult<()> {
@@ -179,7 +174,7 @@ impl ZFComponent for ZFCxxSource {
     }
 }
 
-impl ZFComponentOutputRule for ZFCxxSource {
+impl ZFComponentOutputRule for Source {
     fn output_rule(
         &self,
         _context: &mut ZFContext,
@@ -197,14 +192,14 @@ impl ZFComponentOutputRule for ZFCxxSource {
 }
 
 #[async_trait]
-impl ZFSourceTrait for ZFCxxSource {
+impl ZFSourceTrait for Source {
     async fn run(
         &self,
         context: &mut ZFContext,
         dyn_state: &mut Box<dyn ZFStateTrait>,
     ) -> ZFResult<HashMap<ZFPortID, Arc<dyn ZFDataTrait>>> {
-        let mut cxx_context = ffi::ZFCxxContext::from(context);
-        let wrapper = downcast_mut!(ZFCxxStateWrapper, dyn_state).unwrap();
+        let mut cxx_context = ffi::Context::from(context);
+        let wrapper = downcast_mut!(StateWrapper, dyn_state).unwrap();
 
         let cxx_outputs = {
             #[allow(unused_unsafe)]
@@ -218,7 +213,7 @@ impl ZFSourceTrait for ZFCxxSource {
         for cxx_output in cxx_outputs.into_iter() {
             result.insert(
                 cxx_output.port_id.to_owned(),
-                Arc::new(ffi::ZFCxxData::new(cxx_output.data)),
+                Arc::new(ffi::Data::new(cxx_output.data)),
             );
         }
 
@@ -229,5 +224,5 @@ impl ZFSourceTrait for ZFCxxSource {
 zenoh_flow::export_source!(register);
 
 fn register() -> ZFResult<Arc<dyn ZFSourceTrait>> {
-    Ok(Arc::new(ZFCxxSource) as Arc<dyn ZFSourceTrait>)
+    Ok(Arc::new(Source) as Arc<dyn ZFSourceTrait>)
 }

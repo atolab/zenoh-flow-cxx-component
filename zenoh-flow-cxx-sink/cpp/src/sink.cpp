@@ -1,4 +1,4 @@
-#include "zenoh-flow-cxx-sink/cpp/include/zenoh_flow.hpp"
+#include "zenoh-flow-cxx-sink/cpp/include/sink.hpp"
 #include "zenoh-flow-cxx-sink/src/lib.rs.h"
 #include <cstdint>
 #include <cstring>
@@ -7,7 +7,8 @@
 #include <vector>
 #include <iostream>
 
-namespace zenoh_flow {
+namespace zenoh {
+namespace flow {
 
 using byte_t = unsigned char ;
 
@@ -23,18 +24,20 @@ T& from_bytes( const rust::Vec<byte_t>& bytes, T& object )
     return object ;
 }
 
-std::unique_ptr<ZFCxxState>
-initialize(const ZFCxxConfigurationMap &configuration) {
+State::State() {}
+
+std::unique_ptr<State>
+initialize(const ConfigurationMap &configuration) {
   //
   // /!\ NOTE: `make_unique` requires "c++14"
   //
-  return std::make_unique<ZFCxxState>();
+  return std::make_unique<State>();
 }
 
 bool
-input_rule(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxToken> &tokens) {
+input_rule(Context &context, std::unique_ptr<State> &state, rust::Vec<Token> &tokens) {
   for (auto token : tokens) {
-    if (token.status != ZFCxxTokenStatus::Ready) {
+    if (token.status != TokenStatus::Ready) {
         return false;
       }
   }
@@ -43,7 +46,7 @@ input_rule(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<
 }
 
 void
-run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxInput> inputs) {
+run(Context &context, std::unique_ptr<State> &state, rust::Vec<Input> inputs) {
   for (auto input : inputs) {
     std::cout << "Received on <" << input.port_id << ">: ";
     if (input.port_id == "fizz") {
@@ -53,5 +56,6 @@ run(ZFCxxContext &context, std::unique_ptr<ZFCxxState> &state, rust::Vec<ZFCxxIn
     }
   }
 }
-}
 
+} // namespace flow
+} // namespace zenoh
