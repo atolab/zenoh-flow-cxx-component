@@ -10,20 +10,6 @@
 namespace zenoh {
 namespace flow {
 
-using byte_t = unsigned char ;
-
-template< typename T >
-T& from_bytes( const rust::Vec<byte_t>& bytes, T& object )
-{
-    // http://en.cppreference.com/w/cpp/types/is_trivially_copyable
-    // static_assert( std::is_trivially_copyable<T>::value, "not a TriviallyCopyable type" ) ;
-
-    byte_t* begin_object = reinterpret_cast< byte_t* >( std::addressof(object) ) ;
-    std::copy( bytes.begin(), bytes.end(), begin_object ) ;
-
-    return object ;
-}
-
 State::State() {}
 
 std::unique_ptr<State>
@@ -48,12 +34,12 @@ input_rule(Context &context, std::unique_ptr<State> &state, rust::Vec<Token> &to
 void
 run(Context &context, std::unique_ptr<State> &state, rust::Vec<Input> inputs) {
   for (auto input : inputs) {
-    std::cout << "Received on <" << input.port_id << ">: ";
-    if (input.port_id == "fizz") {
-      std::string fizz = "";
-      from_bytes(input.data, fizz);
-      std::cout << fizz << std::endl;
+    std::cout << "Received on <" << input.port_id << ">: " << std::endl;
+    std::cout << "\t";
+    for (unsigned char c: input.data) {
+      std::cout << unsigned(c);
     }
+    std::cout << std::endl << std::flush;
   }
 }
 

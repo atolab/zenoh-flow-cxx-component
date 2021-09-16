@@ -3,9 +3,9 @@ use cxx::UniquePtr;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use zenoh_flow::{
     downcast_mut,
-    runtime::message::{ZFDataMessage, ZFSerDeData},
-    Token, TokenAction, ZFComponent, ZFComponentInputRule, ZFContext, ZFDataTrait, ZFDowncastAny,
-    ZFError, ZFResult, ZFSinkTrait, ZFStateTrait,
+    runtime::message::{DataMessage, SerDeData},
+    Component, Context, Data, DowncastAny, InputRule, PortId, Sink, State, Token, TokenAction,
+    ZFError, ZFResult,
 };
 
 extern crate zenoh_flow;
@@ -106,7 +106,7 @@ pub struct StateWrapper {
     pub state: UniquePtr<ffi::State>,
 }
 
-impl ZFStateTrait for StateWrapper {
+impl State for StateWrapper {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -134,7 +134,7 @@ impl Debug for ffi::Data {
     }
 }
 
-impl ZFDowncastAny for ffi::Data {
+impl DowncastAny for ffi::Data {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -144,7 +144,7 @@ impl ZFDowncastAny for ffi::Data {
     }
 }
 
-impl ZFDataTrait for ffi::Data {
+impl Data for ffi::Data {
     fn try_serialize(&self) -> ZFResult<Vec<u8>> {
         Ok(self.bytes.clone())
     }
@@ -163,8 +163,8 @@ impl ffi::Token {
 
             Token::Ready(token) => {
                 let data = match &token.data.data {
-                    ZFSerDeData::Serialized(ser) => ser.as_ref().clone(),
-                    ZFSerDeData::Deserialized(de) => de.try_serialize()?,
+                    SerDeData::Serialized(ser) => ser.as_ref().clone(),
+                    SerDeData::Deserialized(de) => de.try_serialize()?,
                 };
 
                 Ok(Self {
@@ -179,8 +179,8 @@ impl ffi::Token {
     }
 }
 
-impl From<&mut ZFContext> for ffi::Context {
-    fn from(context: &mut ZFContext) -> Self {
+impl From<&mut Context> for ffi::Context {
+    fn from(context: &mut Context) -> Self {
         Self { mode: context.mode }
     }
 }
@@ -198,10 +198,10 @@ impl From<TokenAction> for ffi::TokenAction {
 }
 
 impl ffi::Input {
-    fn from_data_message(port_id: &str, data_message: &ZFDataMessage) -> ZFResult<Self> {
+    fn from_data_message(port_id: &str, data_message: &DataMessage) -> ZFResult<Self> {
         let data = match &data_message.data {
-            ZFSerDeData::Serialized(ser) => ser.as_ref().clone(),
-            ZFSerDeData::Deserialized(de) => de.try_serialize()?,
+            SerDeData::Serialized(ser) => ser.as_ref().clone(),
+            SerDeData::Deserialized(de) => de.try_serialize()?,
         };
 
         Ok(Self {
@@ -217,13 +217,13 @@ impl ffi::Input {
 Operator implementation.
 
 */
-pub struct Sink;
+pub struct MySink;
 
-impl ZFComponent for Sink {
+impl Component for MySink {
     fn initialize(
         &self,
         configuration: &Option<std::collections::HashMap<String, String>>,
-    ) -> Box<dyn zenoh_flow::ZFStateTrait> {
+    ) -> Box<dyn zenoh_flow::State> {
         let configuration = match configuration {
             Some(config) => ffi::ConfigurationMap::from(config.clone()),
             None => ffi::ConfigurationMap { map: Vec::new() },
@@ -238,17 +238,17 @@ impl ZFComponent for Sink {
         Box::new(StateWrapper { state })
     }
 
-    fn clean(&self, _state: &mut Box<dyn ZFStateTrait>) -> ZFResult<()> {
+    fn clean(&self, _state: &mut Box<dyn State>) -> ZFResult<()> {
         Ok(())
     }
 }
 
-impl ZFComponentInputRule for Sink {
+impl InputRule for MySink {
     fn input_rule(
         &self,
-        context: &mut zenoh_flow::ZFContext,
-        dyn_state: &mut Box<dyn ZFStateTrait>,
-        tokens: &mut HashMap<String, zenoh_flow::Token>,
+        context: &mut zenoh_flow::Context,
+        dyn_state: &mut Box<dyn State>,
+        tokens: &mut HashMap<PortId, zenoh_flow::Token>,
     ) -> zenoh_flow::ZFResult<bool> {
         let wrapper = downcast_mut!(StateWrapper, dyn_state).unwrap();
         let res_cxx_tokens: Result<Vec<ffi::Token>, ZFError> = tokens
@@ -269,12 +269,12 @@ impl ZFComponentInputRule for Sink {
 }
 
 #[async_trait]
-impl ZFSinkTrait for Sink {
+impl Sink for MySink {
     async fn run(
         &self,
-        context: &mut ZFContext,
-        dyn_state: &mut Box<dyn ZFStateTrait>,
-        inputs: &mut HashMap<String, ZFDataMessage>,
+        context: &mut Context,
+        dyn_state: &mut Box<dyn State>,
+        inputs: &mut HashMap<PortId, DataMessage>,
     ) -> ZFResult<()> {
         let mut cxx_context = ffi::Context::from(context);
         let wrapper = downcast_mut!(StateWrapper, dyn_state).unwrap();
@@ -296,6 +296,6 @@ impl ZFSinkTrait for Sink {
 
 zenoh_flow::export_sink!(register);
 
-fn register() -> ZFResult<Arc<dyn ZFSinkTrait>> {
-    Ok(Arc::new(Sink) as Arc<dyn ZFSinkTrait>)
+fn register() -> ZFResult<Arc<dyn Sink>> {
+    Ok(Arc::new(MySink) as Arc<dyn Sink>)
 }

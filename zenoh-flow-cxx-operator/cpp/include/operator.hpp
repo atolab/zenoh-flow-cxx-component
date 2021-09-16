@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <vector>
 #include "rust/cxx.h"
@@ -10,8 +11,12 @@ namespace zenoh {
 namespace flow {
 
 class State {
+private:
+  std::uint8_t counter;
 public:
   State ();
+  void increaseCounter ();
+  std::uint8_t getCounter ();
 };
 
 std::unique_ptr<State> initialize(const ConfigurationMap &configuration);

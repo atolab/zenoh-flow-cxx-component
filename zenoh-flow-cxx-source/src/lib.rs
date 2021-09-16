@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use cxx::UniquePtr;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use zenoh_flow::{
-    downcast_mut, ZFComponent, ZFComponentOutput, ZFComponentOutputRule, ZFContext, ZFDataTrait,
-    ZFDowncastAny, ZFError, ZFPortID, ZFResult, ZFSourceTrait, ZFStateTrait,
+    downcast_mut, Component, ComponentOutput, Context, Data, DowncastAny, OutputRule, PortId,
+    Source, State, ZFError, ZFResult,
 };
 
 extern crate zenoh_flow;
@@ -93,7 +93,7 @@ pub struct StateWrapper {
     pub state: UniquePtr<ffi::State>,
 }
 
-impl ZFStateTrait for StateWrapper {
+impl State for StateWrapper {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -121,7 +121,7 @@ impl Debug for ffi::Data {
     }
 }
 
-impl ZFDowncastAny for ffi::Data {
+impl DowncastAny for ffi::Data {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -131,14 +131,14 @@ impl ZFDowncastAny for ffi::Data {
     }
 }
 
-impl ZFDataTrait for ffi::Data {
+impl Data for ffi::Data {
     fn try_serialize(&self) -> ZFResult<Vec<u8>> {
         Ok(self.bytes.clone())
     }
 }
 
-impl From<&mut ZFContext> for ffi::Context {
-    fn from(context: &mut ZFContext) -> Self {
+impl From<&mut Context> for ffi::Context {
+    fn from(context: &mut Context) -> Self {
         Self { mode: context.mode }
     }
 }
@@ -148,13 +148,13 @@ impl From<&mut ZFContext> for ffi::Context {
 Source implementation.
 
 */
-pub struct Source;
+pub struct MySource;
 
-impl ZFComponent for Source {
+impl Component for MySource {
     fn initialize(
         &self,
         configuration: &Option<std::collections::HashMap<String, String>>,
-    ) -> Box<dyn zenoh_flow::ZFStateTrait> {
+    ) -> Box<dyn zenoh_flow::State> {
         let configuration = match configuration {
             Some(config) => ffi::ConfigurationMap::from(config.clone()),
             None => ffi::ConfigurationMap { map: Vec::new() },
@@ -169,22 +169,22 @@ impl ZFComponent for Source {
         Box::new(StateWrapper { state })
     }
 
-    fn clean(&self, _state: &mut Box<dyn ZFStateTrait>) -> ZFResult<()> {
+    fn clean(&self, _state: &mut Box<dyn State>) -> ZFResult<()> {
         Ok(())
     }
 }
 
-impl ZFComponentOutputRule for Source {
+impl OutputRule for MySource {
     fn output_rule(
         &self,
-        _context: &mut ZFContext,
-        _dyn_state: &mut Box<dyn ZFStateTrait>,
-        outputs: &HashMap<String, std::sync::Arc<dyn zenoh_flow::ZFDataTrait>>,
-    ) -> ZFResult<HashMap<zenoh_flow::ZFPortID, zenoh_flow::ZFComponentOutput>> {
+        _context: &mut Context,
+        _dyn_state: &mut Box<dyn State>,
+        outputs: &HashMap<PortId, std::sync::Arc<dyn zenoh_flow::Data>>,
+    ) -> ZFResult<HashMap<zenoh_flow::PortId, zenoh_flow::ComponentOutput>> {
         let mut results = HashMap::with_capacity(outputs.len());
         // NOTE: default output rule for now.
         for (port_id, data) in outputs {
-            results.insert(port_id.to_string(), ZFComponentOutput::Data(data.clone()));
+            results.insert(port_id.clone(), ComponentOutput::Data(data.clone()));
         }
 
         Ok(results)
@@ -192,12 +192,12 @@ impl ZFComponentOutputRule for Source {
 }
 
 #[async_trait]
-impl ZFSourceTrait for Source {
+impl Source for MySource {
     async fn run(
         &self,
-        context: &mut ZFContext,
-        dyn_state: &mut Box<dyn ZFStateTrait>,
-    ) -> ZFResult<HashMap<ZFPortID, Arc<dyn ZFDataTrait>>> {
+        context: &mut Context,
+        dyn_state: &mut Box<dyn zenoh_flow::State>,
+    ) -> ZFResult<HashMap<PortId, Arc<dyn Data>>> {
         let mut cxx_context = ffi::Context::from(context);
         let wrapper = downcast_mut!(StateWrapper, dyn_state).unwrap();
 
@@ -208,11 +208,11 @@ impl ZFSourceTrait for Source {
             }
         };
 
-        let mut result: HashMap<ZFPortID, Arc<dyn ZFDataTrait>> =
+        let mut result: HashMap<PortId, Arc<dyn zenoh_flow::Data>> =
             HashMap::with_capacity(cxx_outputs.len());
         for cxx_output in cxx_outputs.into_iter() {
             result.insert(
-                cxx_output.port_id.to_owned(),
+                cxx_output.port_id.into(),
                 Arc::new(ffi::Data::new(cxx_output.data)),
             );
         }
@@ -223,6 +223,6 @@ impl ZFSourceTrait for Source {
 
 zenoh_flow::export_source!(register);
 
-fn register() -> ZFResult<Arc<dyn ZFSourceTrait>> {
-    Ok(Arc::new(Source) as Arc<dyn ZFSourceTrait>)
+fn register() -> ZFResult<Arc<dyn Source>> {
+    Ok(Arc::new(MySource) as Arc<dyn Source>)
 }
